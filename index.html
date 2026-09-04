@@ -1,0 +1,1555 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#100906">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Fruit Slash 3D">
+<meta name="description" content="Fruit Slash 3D - arcade slicing game berbasis Three.js, installable sebagai PWA.">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icons/icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+<title>Fruit Slash 3D PWA</title>
+<style>
+  :root{
+    --gold:#ffd25a;
+    --orange:#ff8a27;
+    --text:#fff7e6;
+    --muted:#dec9aa;
+    --panel:rgba(12,8,6,.82);
+    --border:rgba(255,215,120,.20);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    width:100%;height:100%;overflow:hidden;background:#100906;
+    font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
+    touch-action:none;overscroll-behavior:none;user-select:none;-webkit-user-select:none;
+  }
+  #game{position:relative;width:100%;height:100%;overflow:hidden}
+  #threeCanvas,#slashCanvas{
+    position:absolute;inset:0;width:100%;height:100%;display:block
+  }
+  #slashCanvas{z-index:3;pointer-events:auto;cursor:crosshair}
+  #hud{
+    position:absolute;z-index:5;top:calc(12px + env(safe-area-inset-top));left:calc(12px + env(safe-area-inset-left));right:calc(12px + env(safe-area-inset-right));
+    display:flex;justify-content:space-between;align-items:flex-start;gap:10px;
+    pointer-events:none;color:white;text-shadow:0 2px 12px #000;
+  }
+  .hudGroup{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{
+    min-height:40px;padding:8px 12px;border-radius:999px;
+    background:rgba(5,7,9,.50);border:1px solid rgba(255,255,255,.11);
+    backdrop-filter:blur(9px);font-weight:850;font-size:13px;
+    display:flex;align-items:center;gap:7px;
+  }
+  .chip b{color:var(--gold);font-variant-numeric:tabular-nums}
+  #comboChip{opacity:.35;transition:.14s ease}
+  #comboChip.hot{opacity:1;transform:scale(1.04)}
+  .overlay{
+    position:absolute;inset:0;z-index:10;padding:18px;
+    display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(180deg,rgba(0,0,0,.06),rgba(0,0,0,.63));
+  }
+  .panel{
+    width:min(600px,100%);padding:28px;border-radius:26px;text-align:center;
+    color:var(--text);background:var(--panel);border:1px solid var(--border);
+    backdrop-filter:blur(14px);box-shadow:0 32px 100px rgba(0,0,0,.52);
+  }
+  .kicker{
+    font-size:11px;text-transform:uppercase;letter-spacing:.22em;
+    font-weight:900;color:#e8bf78
+  }
+  h1{
+    margin:7px 0 10px;font-size:clamp(38px,8vw,72px);line-height:.92;
+    letter-spacing:-.05em;
+    background:linear-gradient(180deg,#fff7b8,#ffd15a 52%,#ff7b23);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 8px 20px rgba(255,120,25,.24));
+  }
+  .desc{max-width:520px;margin:0 auto 18px;color:var(--muted);line-height:1.55;font-size:14px}
+  .rules{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin:14px 0 20px}
+  .rule{
+    padding:7px 10px;border-radius:999px;background:rgba(255,255,255,.055);
+    border:1px solid rgba(255,255,255,.08);font-size:12px;font-weight:800;color:#f4e4c7
+  }
+  button.primary{
+    border:0;border-radius:15px;padding:13px 23px;cursor:pointer;
+    background:linear-gradient(135deg,#ffe477,#ffb832 52%,#ff7922);
+    color:#241102;font-size:16px;font-weight:950;letter-spacing:.02em;
+    box-shadow:0 12px 34px rgba(255,130,30,.25)
+  }
+  button.primary:active{transform:translateY(1px)}
+  #gameOver{display:none}
+  .stats{
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:18px 0;text-align:left
+  }
+  .stat{
+    padding:11px 13px;border-radius:14px;background:rgba(255,255,255,.05);
+    border:1px solid rgba(255,255,255,.07)
+  }
+  .stat small{display:block;color:#cbb48f;font-size:11px;text-transform:uppercase;letter-spacing:.08em}
+  .stat strong{display:block;margin-top:2px;color:#fff2cf;font-size:20px}
+  #hint{
+    position:absolute;z-index:5;left:50%;bottom:calc(12px + env(safe-area-inset-bottom));transform:translateX(-50%);
+    white-space:nowrap;color:rgba(255,245,225,.72);font-size:12px;font-weight:800;
+    text-shadow:0 2px 10px #000;pointer-events:none
+  }
+  #soundBtn{
+    position:absolute;right:calc(12px + env(safe-area-inset-right));bottom:calc(12px + env(safe-area-inset-bottom));z-index:12;width:44px;height:44px;
+    border-radius:50%;border:1px solid rgba(255,255,255,.12);
+    background:rgba(10,7,6,.58);backdrop-filter:blur(8px);
+    color:white;font-size:18px;cursor:pointer
+  }
+  #loading{
+    position:absolute;z-index:20;inset:0;display:flex;align-items:center;justify-content:center;
+    background:#100906;color:white;font-weight:800;letter-spacing:.04em
+  }
+  #pauseOverlay{display:none;z-index:18}
+  .subActions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:10px}
+  button.secondary{
+    border:1px solid rgba(255,255,255,.16);border-radius:14px;padding:11px 16px;
+    cursor:pointer;background:rgba(255,255,255,.07);color:#fff4dc;font-weight:850
+  }
+  button.secondary[hidden]{display:none}
+  #rotateNote{
+    position:absolute;z-index:6;top:calc(64px + env(safe-area-inset-top));left:50%;
+    transform:translateX(-50%);padding:6px 10px;border-radius:999px;
+    background:rgba(7,6,6,.55);border:1px solid rgba(255,255,255,.1);
+    color:rgba(255,245,225,.82);font-size:10px;font-weight:800;pointer-events:none;
+    display:none;white-space:nowrap
+  }
+  @media (orientation:portrait) and (max-width:700px){
+    #rotateNote{display:block}
+  }
+  @media (max-width:620px){
+    #hud{left:calc(8px + env(safe-area-inset-left));right:calc(8px + env(safe-area-inset-right));top:calc(8px + env(safe-area-inset-top))}
+    .chip{min-height:34px;padding:6px 9px;font-size:11px}
+    #comboChip,#levelChip{display:none}
+    .panel{padding:22px 18px}
+    #hint{bottom:64px;font-size:10px}
+  }
+</style>
+</head>
+<body>
+<div id="game">
+  <canvas id="threeCanvas"></canvas>
+  <canvas id="slashCanvas"></canvas>
+
+  <div id="hud">
+    <div class="hudGroup">
+      <div class="chip">⚔️ Skor <b id="scoreText">0</b></div>
+      <div class="chip">❤️ <b id="livesText">3</b></div>
+      <div class="chip" id="comboChip">🔥 Combo <b id="comboText">0</b></div>
+    </div>
+    <div class="hudGroup">
+      <div class="chip" id="levelChip">⚡ Lv <b id="levelText">1</b></div>
+      <div class="chip">🎛️ <b id="qualityText">AUTO</b></div>
+      <div class="chip">🏆 <b id="highText">0</b></div>
+    </div>
+  </div>
+
+  <div id="menu" class="overlay">
+    <div class="panel">
+      <div class="kicker">Three.js · Mobile PWA Edition</div>
+      <h1>FRUIT SLASH 3D</h1>
+      <p class="desc">
+        Versi mobile PWA: mesh 3D, raycast slicing, adaptive camera, safe-area, auto quality, pause saat background, dan dukungan offline setelah cache pertama.
+      </p>
+      <div class="rules">
+        <span class="rule">🍉 Tebas buah</span>
+        <span class="rule">🔥 Multi-slice = Combo</span>
+        <span class="rule">💣 Bom = -1 nyawa</span>
+        <span class="rule">⭐ Gold = +100</span>
+        <span class="rule">❤️ Heart = +1 nyawa</span>
+      </div>
+      <button class="primary" id="startBtn">MULAI BERMAIN</button>
+      <div class="subActions">
+        <button class="secondary" id="installBtn" hidden>INSTALL APP</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="gameOver" class="overlay">
+    <div class="panel">
+      <div class="kicker">Run selesai</div>
+      <h1 style="font-size:clamp(36px,7vw,58px)">GAME OVER</h1>
+      <div class="stats">
+        <div class="stat"><small>Skor</small><strong id="finalScore">0</strong></div>
+        <div class="stat"><small>Best Combo</small><strong id="finalCombo">0</strong></div>
+        <div class="stat"><small>Buah Dipotong</small><strong id="finalSliced">0</strong></div>
+        <div class="stat"><small>Akurasi</small><strong id="finalAccuracy">0%</strong></div>
+      </div>
+      <button class="primary" id="restartBtn">MAIN LAGI</button>
+    </div>
+  </div>
+
+  <div id="pauseOverlay" class="overlay">
+    <div class="panel">
+      <div class="kicker">Game dijeda</div>
+      <h1 style="font-size:clamp(34px,7vw,54px)">PAUSE</h1>
+      <p class="desc">Game otomatis dijeda ketika aplikasi berpindah ke background.</p>
+      <button class="primary" id="resumeBtn">LANJUTKAN</button>
+    </div>
+  </div>
+  <div id="rotateNote">↻ Landscape direkomendasikan untuk area permainan lebih luas</div>
+  <div id="hint">Tahan mouse / sentuh layar lalu geser untuk menebas</div>
+  <button id="soundBtn" title="Aktif/nonaktif suara">🔊</button>
+  <div id="loading">Memuat engine 3D…</div>
+</div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
+
+// ============================================================
+// DOM
+// ============================================================
+const threeCanvas = document.getElementById('threeCanvas');
+const slashCanvas = document.getElementById('slashCanvas');
+const sctx = slashCanvas.getContext('2d');
+
+const ui = {
+  score: document.getElementById('scoreText'),
+  lives: document.getElementById('livesText'),
+  combo: document.getElementById('comboText'),
+  comboChip: document.getElementById('comboChip'),
+  level: document.getElementById('levelText'),
+  high: document.getElementById('highText'),
+  menu: document.getElementById('menu'),
+  over: document.getElementById('gameOver'),
+  finalScore: document.getElementById('finalScore'),
+  finalCombo: document.getElementById('finalCombo'),
+  finalSliced: document.getElementById('finalSliced'),
+  finalAccuracy: document.getElementById('finalAccuracy'),
+  soundBtn: document.getElementById('soundBtn'),
+  loading: document.getElementById('loading'),
+  quality: document.getElementById('qualityText'),
+  pause: document.getElementById('pauseOverlay'),
+  resume: document.getElementById('resumeBtn'),
+  install: document.getElementById('installBtn')
+};
+
+// ============================================================
+// UTILS + STORAGE
+// ============================================================
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const rand=(a,b)=>a+Math.random()*(b-a);
+const choose=a=>a[(Math.random()*a.length)|0];
+
+function getStore(k,f){
+  try{const v=localStorage.getItem(k);return v===null?f:v}catch(_){return f}
+}
+function setStore(k,v){try{localStorage.setItem(k,String(v))}catch(_){}}
+
+let highScore=Number(getStore('fruit-slash-3d-high',0))||0;
+ui.high.textContent=highScore;
+
+// ============================================================
+// THREE.JS CORE
+// ============================================================
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x160d09);
+scene.fog=new THREE.Fog(0x160d09,18,38);
+
+const camera=new THREE.PerspectiveCamera(48,innerWidth/innerHeight,.1,80);
+camera.position.set(0,.6,13.5);
+camera.lookAt(0,.2,0);
+
+
+const QUALITY_PRESETS={
+  low:{label:'LOW',dpr:1.0,shadow:512,particles:.45,shadows:false},
+  medium:{label:'MED',dpr:1.45,shadow:1024,particles:.72,shadows:true},
+  high:{label:'HIGH',dpr:2.0,shadow:1536,particles:1.0,shadows:true}
+};
+
+function detectInitialQuality(){
+  const mem=navigator.deviceMemory||8;
+  const cores=navigator.hardwareConcurrency||8;
+  const mobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const pixels=innerWidth*innerHeight*(devicePixelRatio||1);
+  if(mem<=4||cores<=4||pixels>4500000)return 'low';
+  if(mobile||mem<=6||cores<=6)return 'medium';
+  return 'high';
+}
+
+let qualityName=detectInitialQuality();
+let quality=QUALITY_PRESETS[qualityName];
+let gameplayHalfWidth=4.2;
+let adaptiveCamZ=13.5;
+let adaptiveCamY=.6;
+let perfTime=0,perfFrames=0;
+
+const renderer=new THREE.WebGLRenderer({
+  canvas:threeCanvas,
+  antialias:true,
+  alpha:false,
+  powerPreference:'high-performance'
+});
+renderer.setPixelRatio(Math.min(quality.dpr,devicePixelRatio||1));
+renderer.setSize(innerWidth,innerHeight,false);
+renderer.shadowMap.enabled=quality.shadows;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.16;
+
+// Lighting
+scene.add(new THREE.HemisphereLight(0xffe8c7,0x20140f,1.6));
+
+const keyLight=new THREE.DirectionalLight(0xfff1cf,3.0);
+keyLight.position.set(-5,9,8);
+keyLight.castShadow=true;
+keyLight.shadow.mapSize.set(quality.shadow,quality.shadow);
+keyLight.shadow.camera.left=-11;
+keyLight.shadow.camera.right=11;
+keyLight.shadow.camera.top=10;
+keyLight.shadow.camera.bottom=-10;
+keyLight.shadow.camera.near=.5;
+keyLight.shadow.camera.far=35;
+scene.add(keyLight);
+
+function applyQuality(name){
+  if(!QUALITY_PRESETS[name])return;
+  qualityName=name;
+  quality=QUALITY_PRESETS[name];
+  ui.quality.textContent=quality.label;
+  renderer.shadowMap.enabled=quality.shadows;
+  renderer.setPixelRatio(Math.min(quality.dpr,devicePixelRatio||1));
+  keyLight.shadow.mapSize.set(quality.shadow,quality.shadow);
+  if(keyLight.shadow.map){
+    keyLight.shadow.map.dispose();
+    keyLight.shadow.map=null;
+  }
+  renderer.setSize(innerWidth,innerHeight,false);
+}
+ui.quality.textContent=quality.label;
+
+const warmLight=new THREE.PointLight(0xff9b43,16,18,2);
+warmLight.position.set(5,4,5);
+scene.add(warmLight);
+
+const coolLight=new THREE.PointLight(0x59c7ff,8,14,2);
+coolLight.position.set(-6,2,4);
+scene.add(coolLight);
+
+// ============================================================
+// PROCEDURAL ENVIRONMENT
+// ============================================================
+function makeWoodTexture(){
+  const c=document.createElement('canvas');
+  c.width=1024;c.height=1024;
+  const x=c.getContext('2d');
+  x.fillStyle='#35190d';x.fillRect(0,0,1024,1024);
+
+  const plank=128;
+  for(let y=0;y<1024;y+=plank){
+    x.fillStyle=(y/plank)%2?'#3c1c0d':'#32160b';
+    x.fillRect(0,y,1024,plank-4);
+
+    x.strokeStyle='rgba(255,185,100,.09)';
+    x.lineWidth=2;
+    x.beginPath();x.moveTo(0,y);x.lineTo(1024,y);x.stroke();
+
+    for(let k=0;k<18;k++){
+      const yy=y+rand(10,plank-12);
+      x.strokeStyle=`rgba(220,120,58,${rand(.025,.07)})`;
+      x.lineWidth=rand(.6,1.7);
+      x.beginPath();
+      x.moveTo(0,yy);
+      for(let xx=0;xx<1024;xx+=80){
+        x.quadraticCurveTo(xx+40,yy+Math.sin((xx+yy)*.018)*rand(2,7),xx+80,yy);
+      }
+      x.stroke();
+    }
+  }
+
+  const t=new THREE.CanvasTexture(c);
+  t.colorSpace=THREE.SRGBColorSpace;
+  t.wrapS=t.wrapT=THREE.RepeatWrapping;
+  t.repeat.set(3,3);
+  t.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
+  return t;
+}
+
+const woodTex=makeWoodTexture();
+
+const floorMat=new THREE.MeshStandardMaterial({
+  map:woodTex,
+  roughness:.78,
+  metalness:.02
+});
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(28,24),floorMat);
+floor.rotation.x=-Math.PI/2;
+floor.position.y=-5.25;
+floor.receiveShadow=true;
+scene.add(floor);
+
+const backMat=new THREE.MeshStandardMaterial({
+  map:woodTex,
+  roughness:.85,
+  color:0x8d5a38
+});
+const back=new THREE.Mesh(new THREE.PlaneGeometry(26,15),backMat);
+back.position.set(0,1,-6.2);
+back.receiveShadow=true;
+scene.add(back);
+
+// wooden cross beams
+const beamMat=new THREE.MeshStandardMaterial({color:0x2b130b,roughness:.9});
+for(const x of [-9.7,9.7]){
+  const b=new THREE.Mesh(new THREE.BoxGeometry(.55,14,.5),beamMat);
+  b.position.set(x,1,-5.85);
+  b.castShadow=b.receiveShadow=true;
+  scene.add(b);
+}
+for(const y of [-3.7,4.9]){
+  const b=new THREE.Mesh(new THREE.BoxGeometry(20,.55,.5),beamMat);
+  b.position.set(0,y,-5.85);
+  b.castShadow=b.receiveShadow=true;
+  scene.add(b);
+}
+
+// decorative bamboo
+const bambooMat=new THREE.MeshStandardMaterial({color:0x345c2c,roughness:.72});
+for(const side of [-1,1]){
+  for(let i=0;i<4;i++){
+    const stem=new THREE.Mesh(new THREE.CylinderGeometry(.07,.085,7.6,10),bambooMat);
+    stem.position.set(side*(8.7+i*.34),-1.0,-4.9+i*.10);
+    stem.rotation.z=side*(.03+i*.02);
+    stem.castShadow=true;
+    scene.add(stem);
+  }
+}
+
+// lanterns
+function lantern(x,y,z){
+  const g=new THREE.Group();
+  const shell=new THREE.Mesh(
+    new THREE.CylinderGeometry(.42,.48,.82,18),
+    new THREE.MeshStandardMaterial({
+      color:0xff9b42,emissive:0xff6d15,emissiveIntensity:1.6,
+      roughness:.5,transparent:true,opacity:.92
+    })
+  );
+  shell.castShadow=true;
+  g.add(shell);
+  const top=new THREE.Mesh(new THREE.CylinderGeometry(.28,.28,.08,16),beamMat);
+  top.position.y=.45;g.add(top);
+  const bot=top.clone();bot.position.y=-.45;g.add(bot);
+  g.position.set(x,y,z);
+  scene.add(g);
+
+  const pl=new THREE.PointLight(0xff8b35,4.5,7,2);
+  pl.position.set(x,y,z+.3);
+  scene.add(pl);
+}
+lantern(-6.8,3.8,-4.9);
+lantern(6.8,3.8,-4.9);
+
+// ============================================================
+// MATERIALS + FRUIT FACTORY
+// ============================================================
+const FRUIT_TYPES=[
+  {name:'apple',score:10,color:0xe53732,juice:0xff4e42,flesh:0xffe8c4,rough:.34},
+  {name:'orange',score:15,color:0xff8d0a,juice:0xff9f1a,flesh:0xffb93c,rough:.62},
+  {name:'watermelon',score:20,color:0x38a957,juice:0xf04459,flesh:0xf04c62,rough:.48},
+  {name:'banana',score:15,color:0xf2cf28,juice:0xf5da68,flesh:0xffef9c,rough:.53},
+  {name:'peach',score:12,color:0xf47a70,juice:0xff8178,flesh:0xffd19d,rough:.60}
+];
+
+const fruitSphere=new THREE.SphereGeometry(.78,32,24);
+const bombGeo=new THREE.SphereGeometry(.72,28,20);
+const stemGeo=new THREE.CylinderGeometry(.06,.07,.38,8);
+const leafGeo=new THREE.SphereGeometry(.18,12,8);
+const seedGeo=new THREE.SphereGeometry(.045,8,6);
+
+function physicalMat(color,roughness=.42,extra={}){
+  return new THREE.MeshPhysicalMaterial({
+    color,
+    roughness,
+    metalness:0,
+    clearcoat:.30,
+    clearcoatRoughness:.28,
+    ...extra
+  });
+}
+
+function makeWatermelonTexture(){
+  const c=document.createElement('canvas');
+  c.width=512;c.height=256;
+  const x=c.getContext('2d');
+  x.fillStyle='#3dae59';x.fillRect(0,0,512,256);
+  x.strokeStyle='#176b36';x.lineWidth=18;
+  for(let i=-1;i<8;i++){
+    x.beginPath();
+    const xx=i*80;
+    x.moveTo(xx,0);
+    x.bezierCurveTo(xx+35,65,xx-25,185,xx+10,256);
+    x.stroke();
+  }
+  const t=new THREE.CanvasTexture(c);
+  t.colorSpace=THREE.SRGBColorSpace;
+  t.wrapS=t.wrapT=THREE.RepeatWrapping;
+  return t;
+}
+const watermelonTexture=makeWatermelonTexture();
+
+function makeFruitMesh(type,special=null){
+  const g=new THREE.Group();
+  let body=null;
+
+  if(type.name==='banana'){
+    const curve=new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-.86,-.10,0),
+      new THREE.Vector3(-.50,.32,0),
+      new THREE.Vector3(0,.48,0),
+      new THREE.Vector3(.50,.32,0),
+      new THREE.Vector3(.86,-.10,0)
+    ]);
+    const geom=new THREE.TubeGeometry(curve,40,.22,12,false);
+    body=new THREE.Mesh(geom,physicalMat(type.color,type.rough));
+    body.rotation.z=.08;
+    const endMat=new THREE.MeshStandardMaterial({color:0x5b3a16,roughness:.9});
+    const e1=new THREE.Mesh(new THREE.SphereGeometry(.12,12,8),endMat);
+    const e2=e1.clone();
+    e1.position.set(-.86,-.10,0);
+    e2.position.set(.86,-.10,0);
+    g.add(body,e1,e2);
+  }else if(type.name==='peach'){
+    const mat=physicalMat(type.color,type.rough);
+    const a=new THREE.Mesh(fruitSphere,mat);
+    const b=new THREE.Mesh(fruitSphere,mat);
+    a.scale.set(.82,.96,.82);
+    b.scale.set(.82,.96,.82);
+    a.position.x=-.18;
+    b.position.x=.18;
+    body=a;
+    g.add(a,b);
+  }else{
+    let mat;
+    if(type.name==='watermelon'){
+      mat=new THREE.MeshPhysicalMaterial({
+        map:watermelonTexture,
+        roughness:.48,
+        clearcoat:.20,
+        clearcoatRoughness:.35
+      });
+    }else{
+      mat=physicalMat(type.color,type.rough);
+    }
+    body=new THREE.Mesh(fruitSphere,mat);
+
+    if(type.name==='apple') body.scale.set(1,.92,.96);
+    if(type.name==='orange') body.scale.set(.94,.94,.94);
+    if(type.name==='watermelon') body.scale.set(1.20,1.02,1.02);
+
+    g.add(body);
+  }
+
+  g.traverse(o=>{
+    if(o.isMesh){
+      o.castShadow=true;
+      o.receiveShadow=true;
+    }
+  });
+
+  if(type.name==='apple'||type.name==='peach'){
+    const stem=new THREE.Mesh(
+      stemGeo,
+      new THREE.MeshStandardMaterial({color:0x563314,roughness:.9})
+    );
+    stem.position.y=.79;
+    stem.rotation.z=.16;
+    stem.castShadow=true;
+    g.add(stem);
+
+    const leaf=new THREE.Mesh(
+      leafGeo,
+      new THREE.MeshStandardMaterial({color:0x5c9f38,roughness:.75})
+    );
+    leaf.scale.set(1.8,.35,.8);
+    leaf.position.set(.17,.91,0);
+    leaf.rotation.z=-.35;
+    leaf.castShadow=true;
+    g.add(leaf);
+  }
+
+  if(type.name==='orange'){
+    const nub=new THREE.Mesh(
+      new THREE.SphereGeometry(.11,12,8),
+      new THREE.MeshStandardMaterial({color:0x56802d,roughness:.8})
+    );
+    nub.scale.y=.35;nub.position.y=.77;
+    g.add(nub);
+  }
+
+  if(special==='gold'){
+    g.traverse(o=>{
+      if(o.isMesh){
+        o.material=o.material.clone();
+        o.material.color.set(0xffc833);
+        o.material.emissive?.set(0x6d3d00);
+        if('emissiveIntensity' in o.material)o.material.emissiveIntensity=.8;
+        o.material.metalness=.25;
+        o.material.roughness=.20;
+      }
+    });
+    const star=new THREE.Mesh(
+      new THREE.OctahedronGeometry(.17),
+      new THREE.MeshStandardMaterial({color:0xfff2a2,emissive:0xffd04d,emissiveIntensity:1.3})
+    );
+    star.position.z=.82;star.scale.y=1.3;
+    g.add(star);
+  }
+
+  if(special==='heart'){
+    g.traverse(o=>{
+      if(o.isMesh){
+        o.material=o.material.clone();
+        o.material.color.set(0xff5f8f);
+        o.material.emissive?.set(0x6a102e);
+        if('emissiveIntensity' in o.material)o.material.emissiveIntensity=.35;
+      }
+    });
+    const heartMat=new THREE.MeshStandardMaterial({color:0xffd7e4,emissive:0xff507f,emissiveIntensity:.8});
+    const h1=new THREE.Mesh(new THREE.SphereGeometry(.13,12,8),heartMat);
+    const h2=h1.clone();
+    h1.position.set(-.10,.02,.82);h2.position.set(.10,.02,.82);
+    const tip=new THREE.Mesh(new THREE.ConeGeometry(.18,.32,12),heartMat);
+    tip.position.set(0,-.14,.82);tip.rotation.z=Math.PI;
+    g.add(h1,h2,tip);
+  }
+
+  return g;
+}
+
+function makeBomb(){
+  const g=new THREE.Group();
+  const bomb=new THREE.Mesh(
+    bombGeo,
+    new THREE.MeshPhysicalMaterial({
+      color:0x171a1d,
+      roughness:.32,
+      metalness:.65,
+      clearcoat:.45
+    })
+  );
+  bomb.castShadow=bomb.receiveShadow=true;
+  g.add(bomb);
+
+  const cap=new THREE.Mesh(
+    new THREE.CylinderGeometry(.12,.15,.20,10),
+    new THREE.MeshStandardMaterial({color:0x614226,roughness:.85})
+  );
+  cap.position.y=.72;g.add(cap);
+
+  const fuseCurve=new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0,.80,0),
+    new THREE.Vector3(.08,1.00,0),
+    new THREE.Vector3(.20,1.10,.02)
+  ]);
+  const fuse=new THREE.Mesh(
+    new THREE.TubeGeometry(fuseCurve,12,.035,7,false),
+    new THREE.MeshStandardMaterial({color:0x7a4d27,roughness:.95})
+  );
+  g.add(fuse);
+
+  const sparkMat=new THREE.MeshStandardMaterial({
+    color:0xffb52d,emissive:0xff5e11,emissiveIntensity:3.2
+  });
+  const spark=new THREE.Mesh(new THREE.SphereGeometry(.09,10,8),sparkMat);
+  spark.position.set(.21,1.11,.02);
+  g.add(spark);
+  g.userData.spark=spark;
+
+  return g;
+}
+
+// ============================================================
+// GAME STATE
+// ============================================================
+const STATE={MENU:0,PLAYING:1,GAMEOVER:2};
+let state=STATE.MENU;
+let isPaused=false;
+let score=0,lives=3,elapsed=0,level=1,spawnTimer=.6;
+let bestCombo=0,totalSliced=0,totalMissed=0,bombsHit=0;
+let currentSwipeHits=0;
+let shake=0,flash=0;
+
+let entities=[];
+let fx=[];
+let previewObjects=[];
+
+function difficulty(){
+  level=Math.min(12,1+Math.floor(elapsed/18));
+  return {
+    interval:Math.max(.31,.79-(level-1)*.038),
+    groupMax:Math.min(4,1+Math.floor((level+1)/3)),
+    speedBonus:(level-1)*.23,
+    bombChance:Math.min(.20,.045+(level-1)*.014)
+  };
+}
+
+function updateUI(){
+  ui.score.textContent=Math.floor(score);
+  ui.lives.textContent=Math.max(0,lives);
+  ui.combo.textContent=currentSwipeHits;
+  ui.level.textContent=level;
+  ui.comboChip.classList.toggle('hot',currentSwipeHits>=2);
+
+  if(score>highScore){
+    highScore=Math.floor(score);
+    ui.high.textContent=highScore;
+    setStore('fruit-slash-3d-high',highScore);
+  }
+}
+
+function clearGameEntities(){
+  for(const e of entities) scene.remove(e.root);
+  for(const e of fx) scene.remove(e.object);
+  entities=[];fx=[];
+}
+
+function resetGame(){
+  clearGameEntities();
+  for(const o of previewObjects)scene.remove(o);
+  previewObjects=[];
+
+  score=0;lives=3;elapsed=0;level=1;spawnTimer=.5;
+  bestCombo=0;totalSliced=0;totalMissed=0;bombsHit=0;
+  currentSwipeHits=0;shake=0;flash=0;
+  slashTrail.length=0;
+  state=STATE.PLAYING;
+  isPaused=false;
+  ui.pause.style.display='none';
+  ui.over.style.display='none';
+  updateUI();
+}
+
+function startGame(){
+  ensureAudio();
+  resetGame();
+  ui.menu.style.display='none';
+  if(screen.orientation&&screen.orientation.lock){
+    screen.orientation.lock('landscape').catch(()=>{});
+  }
+}
+
+function endGame(){
+  if(state!==STATE.PLAYING)return;
+  state=STATE.GAMEOVER;
+  pointerDown=false;
+  currentSwipeHits=0;
+  updateUI();
+
+  const attempts=totalSliced+totalMissed;
+  const accuracy=attempts?Math.round(totalSliced/attempts*100):0;
+  ui.finalScore.textContent=Math.floor(score);
+  ui.finalCombo.textContent=bestCombo;
+  ui.finalSliced.textContent=totalSliced;
+  ui.finalAccuracy.textContent=accuracy+'%';
+  ui.over.style.display='flex';
+}
+
+document.getElementById('startBtn').addEventListener('click',startGame);
+document.getElementById('restartBtn').addEventListener('click',startGame);
+
+ui.resume.addEventListener('click',()=>{
+  ensureAudio();
+  isPaused=false;
+  ui.pause.style.display='none';
+  last=performance.now();
+});
+
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden&&state===STATE.PLAYING&&!isPaused){
+    isPaused=true;
+    pointerDown=false;
+    ui.pause.style.display='flex';
+  }
+});
+
+// ============================================================
+// ENTITY SPAWN
+// ============================================================
+function attachRootRefs(root){
+  root.traverse(o=>o.userData.entityRoot=root);
+}
+
+function spawnFruit(type,x,vx,vy,vz,special=null){
+  const root=makeFruitMesh(type,special);
+  root.position.set(x,-5.0,rand(-.9,.7));
+  root.rotation.set(rand(-.3,.3),rand(0,Math.PI*2),rand(-.25,.25));
+  root.scale.setScalar(rand(.90,1.08));
+
+  root.userData.entity={
+    kind:'fruit',type,special,
+    velocity:new THREE.Vector3(vx,vy,vz),
+    rotVel:new THREE.Vector3(rand(-1.8,1.8),rand(-2.1,2.1),rand(-1.6,1.6)),
+    radius:type.name==='watermelon'?.95:.78,
+    sliced:false,missed:false
+  };
+  attachRootRefs(root);
+  scene.add(root);
+  entities.push({root});
+}
+
+function spawnBomb(x,vx,vy,vz){
+  const root=makeBomb();
+  root.position.set(x,-5.0,rand(-.7,.6));
+  root.rotation.set(0,rand(0,Math.PI*2),0);
+  root.userData.entity={
+    kind:'bomb',
+    velocity:new THREE.Vector3(vx,vy,vz),
+    rotVel:new THREE.Vector3(rand(-1.4,1.4),rand(-1.8,1.8),rand(-1.2,1.2)),
+    radius:.76,sliced:false
+  };
+  attachRootRefs(root);
+  scene.add(root);
+  entities.push({root});
+}
+
+function spawnWave(){
+  const d=difficulty();
+  let count=1+((Math.random()*d.groupMax)|0);
+  if(level>=3&&Math.random()<.28)count=Math.min(4,2+((Math.random()*3)|0));
+
+  const baseX=rand(-gameplayHalfWidth*.64,gameplayHalfWidth*.64);
+  const spacing=.95;
+  const baseVy=8.45+d.speedBonus+rand(.15,1.15);
+
+  for(let i=0;i<count;i++){
+    const type=choose(FRUIT_TYPES);
+    const offset=(i-(count-1)/2)*spacing;
+    const x=clamp(baseX+offset,-gameplayHalfWidth,gameplayHalfWidth);
+    const vx=-x*.10+rand(-.35,.35);
+    const vy=baseVy+Math.abs(offset)*.10+rand(-.25,.20);
+    const vz=rand(-.20,.20);
+
+    let special=null;
+    const s=Math.random();
+    if(s<.025)special='heart';
+    else if(s<.075)special='gold';
+
+    spawnFruit(type,x,vx,vy,vz,special);
+  }
+
+  if(Math.random()<d.bombChance){
+    const bombHalf=Math.min(3.4,gameplayHalfWidth*.82);
+    const x=rand(-bombHalf,bombHalf);
+    spawnBomb(x,-x*.08+rand(-.28,.28),baseVy+rand(-.2,.35),rand(-.16,.16));
+  }
+}
+
+// ============================================================
+// 3D SLICE EFFECTS
+// ============================================================
+function fruitScaleForType(type){
+  if(type.name==='apple')return new THREE.Vector3(1,.92,.96);
+  if(type.name==='orange')return new THREE.Vector3(.94,.94,.94);
+  if(type.name==='watermelon')return new THREE.Vector3(1.20,1.02,1.02);
+  return new THREE.Vector3(1,1,1);
+}
+
+function makeSphericalHalf(type,side){
+  const geom=new THREE.SphereGeometry(
+    .78,28,18,
+    side<0?0:Math.PI,
+    Math.PI,
+    0,Math.PI
+  );
+
+  let outerMat;
+  if(type.name==='watermelon'){
+    outerMat=new THREE.MeshPhysicalMaterial({
+      map:watermelonTexture,roughness:.48,clearcoat:.20,clearcoatRoughness:.35
+    });
+  }else{
+    outerMat=physicalMat(type.color,type.rough);
+  }
+
+  const group=new THREE.Group();
+  const shell=new THREE.Mesh(geom,outerMat);
+  shell.castShadow=true;
+  shell.receiveShadow=true;
+  const sc=fruitScaleForType(type);
+  shell.scale.copy(sc);
+  group.add(shell);
+
+  const cutMat=new THREE.MeshStandardMaterial({
+    color:type.flesh,
+    roughness:.75,
+    side:THREE.DoubleSide
+  });
+  const face=new THREE.Mesh(new THREE.CircleGeometry(.72,32),cutMat);
+  face.position.z=side<0?.003:-.003;
+  if(side>0)face.rotation.y=Math.PI;
+  face.scale.set(sc.x,sc.y,1);
+  group.add(face);
+
+  if(type.name==='watermelon'){
+    const seedMat=new THREE.MeshStandardMaterial({color:0x34151b,roughness:.85});
+    for(let i=0;i<7;i++){
+      const a=i/7*Math.PI*2+.4;
+      const seed=new THREE.Mesh(seedGeo,seedMat);
+      seed.scale.set(.5,1.3,.45);
+      seed.position.set(Math.cos(a)*.34,Math.sin(a)*.34,side<0?.02:-.02);
+      group.add(seed);
+    }
+  }
+
+  return group;
+}
+
+function makeBananaHalf(side){
+  const points=side<0
+    ?[
+      new THREE.Vector3(-.86,-.10,0),
+      new THREE.Vector3(-.62,.19,0),
+      new THREE.Vector3(-.36,.38,0),
+      new THREE.Vector3(0,.48,0)
+    ]
+    :[
+      new THREE.Vector3(0,.48,0),
+      new THREE.Vector3(.36,.38,0),
+      new THREE.Vector3(.62,.19,0),
+      new THREE.Vector3(.86,-.10,0)
+    ];
+
+  const curve=new THREE.CatmullRomCurve3(points);
+  const tube=new THREE.Mesh(
+    new THREE.TubeGeometry(curve,20,.22,12,false),
+    physicalMat(0xf2cf28,.53)
+  );
+  tube.castShadow=true;
+  const g=new THREE.Group();g.add(tube);
+
+  const face=new THREE.Mesh(
+    new THREE.CircleGeometry(.21,16),
+    new THREE.MeshStandardMaterial({color:0xffef9c,roughness:.8,side:THREE.DoubleSide})
+  );
+  face.position.set(0,.48,0);
+  face.rotation.x=Math.PI/2;
+  g.add(face);
+  return g;
+}
+
+function spawnFruitHalves(root,swipeAngle){
+  const e=root.userData.entity;
+  const type=e.type;
+  if(e.special)return;
+
+  for(const side of [-1,1]){
+    let half;
+    if(type.name==='banana')half=makeBananaHalf(side);
+    else if(type.name==='peach'){
+      // Peach uses spherical halves for a clean cut effect.
+      half=makeSphericalHalf(type,side);
+      half.scale.set(.92,1,.92);
+    }else{
+      half=makeSphericalHalf(type,side);
+    }
+
+    half.position.copy(root.position);
+    half.quaternion.copy(root.quaternion);
+    half.scale.multiplyScalar(root.scale.x);
+    scene.add(half);
+
+    const dir=new THREE.Vector3(
+      Math.cos(swipeAngle+Math.PI/2),
+      Math.sin(swipeAngle+Math.PI/2),
+      rand(-.12,.12)
+    ).multiplyScalar(side*.95);
+
+    fx.push({
+      type:'half',
+      object:half,
+      velocity:e.velocity.clone().multiplyScalar(.28).add(dir),
+      rotVel:new THREE.Vector3(rand(-2.5,2.5),rand(-2.8,2.8),side*rand(2.8,5.1)),
+      life:2.5
+    });
+  }
+}
+
+function spawnJuice(root,color,swipeAngle){
+  const count=Math.max(18,Math.floor(46*quality.particles));
+  const pos=new Float32Array(count*3);
+  const velocities=[];
+
+  for(let i=0;i<count;i++){
+    const p=root.position;
+    pos[i*3]=p.x+rand(-.08,.08);
+    pos[i*3+1]=p.y+rand(-.08,.08);
+    pos[i*3+2]=p.z+rand(-.06,.06);
+
+    const side=Math.random()<.5?-1:1;
+    const a=swipeAngle+side*Math.PI/2+rand(-1.0,1.0);
+    velocities.push(new THREE.Vector3(
+      Math.cos(a)*rand(.8,3.1),
+      Math.sin(a)*rand(.8,3.2)+rand(.2,1.2),
+      rand(-.7,.7)
+    ));
+  }
+
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+
+  const mat=new THREE.PointsMaterial({
+    color,
+    size:.105,
+    sizeAttenuation:true,
+    transparent:true,
+    opacity:.95,
+    depthWrite:false
+  });
+
+  const points=new THREE.Points(geo,mat);
+  scene.add(points);
+  fx.push({type:'juice',object:points,velocities,life:.95,maxLife:.95});
+}
+
+function spawnExplosion(root){
+  const count=Math.max(28,Math.floor(72*quality.particles));
+  const pos=new Float32Array(count*3);
+  const velocities=[];
+
+  for(let i=0;i<count;i++){
+    pos[i*3]=root.position.x;
+    pos[i*3+1]=root.position.y;
+    pos[i*3+2]=root.position.z;
+
+    const v=new THREE.Vector3(rand(-1,1),rand(-1,1),rand(-1,1)).normalize().multiplyScalar(rand(2.2,6.2));
+    velocities.push(v);
+  }
+
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  const mat=new THREE.PointsMaterial({
+    color:0xff7627,size:.14,transparent:true,opacity:1,depthWrite:false
+  });
+  const pts=new THREE.Points(geo,mat);
+  scene.add(pts);
+  fx.push({type:'explosion',object:pts,velocities,life:.85,maxLife:.85});
+}
+
+// ============================================================
+// FLOATING 3D TEXT SUBSTITUTE (HTML/CANVAS OVERLAY)
+// ============================================================
+let floatTexts=[];
+function addFloatText(worldPos,text,color='#fff',size=24){
+  floatTexts.push({pos:worldPos.clone(),text,color,size,life:1,vy:.75});
+}
+
+// ============================================================
+// AUDIO
+// ============================================================
+let audioCtx=null;
+let soundOn=true;
+let swooshCooldown=0;
+
+function ensureAudio(){
+  if(!soundOn)return null;
+  if(!audioCtx){
+    try{audioCtx=new (window.AudioContext||window.webkitAudioContext)()}catch(_){return null}
+  }
+  if(audioCtx.state==='suspended')audioCtx.resume();
+  return audioCtx;
+}
+
+function tone(freq,duration,type='sine',volume=.04,endFreq=null){
+  const ac=ensureAudio();if(!ac)return;
+  const t=ac.currentTime;
+  const osc=ac.createOscillator();
+  const gain=ac.createGain();
+  osc.type=type;
+  osc.frequency.setValueAtTime(freq,t);
+  if(endFreq)osc.frequency.exponentialRampToValueAtTime(Math.max(20,endFreq),t+duration);
+  gain.gain.setValueAtTime(volume,t);
+  gain.gain.exponentialRampToValueAtTime(.0001,t+duration);
+  osc.connect(gain).connect(ac.destination);
+  osc.start(t);osc.stop(t+duration);
+}
+
+function noise(duration=.12,volume=.05){
+  const ac=ensureAudio();if(!ac)return;
+  const len=Math.max(1,Math.floor(ac.sampleRate*duration));
+  const buf=ac.createBuffer(1,len,ac.sampleRate);
+  const d=buf.getChannelData(0);
+  for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*(1-i/len);
+  const src=ac.createBufferSource();
+  const filter=ac.createBiquadFilter();
+  const gain=ac.createGain();
+  filter.type='bandpass';filter.frequency.value=950;filter.Q.value=.8;
+  gain.gain.value=volume;
+  src.buffer=buf;
+  src.connect(filter).connect(gain).connect(ac.destination);
+  src.start();src.stop(ac.currentTime+duration);
+}
+
+const sfxSlice=()=>{noise(.07,.03);tone(520,.055,'triangle',.025,780)};
+const sfxCombo=n=>tone(520+n*50,.10,'sine',.04,850+n*25);
+const sfxMiss=()=>tone(165,.18,'sawtooth',.035,88);
+const sfxBomb=()=>{noise(.32,.13);tone(95,.33,'square',.045,38)};
+
+function sfxSwoosh(speed){
+  if(swooshCooldown>0||speed<600)return;
+  swooshCooldown=.07;
+  tone(260+Math.min(650,speed*.30),.05,'triangle',.017,130);
+}
+
+ui.soundBtn.addEventListener('click',()=>{
+  soundOn=!soundOn;
+  ui.soundBtn.textContent=soundOn?'🔊':'🔇';
+  if(soundOn)ensureAudio();
+});
+
+// ============================================================
+// SLASH RAYCAST
+// ============================================================
+const raycaster=new THREE.Raycaster();
+let pointerDown=false,pointerId=null,lastPointer=null;
+const slashTrail=[];
+
+function screenPos(e){
+  const r=slashCanvas.getBoundingClientRect();
+  return {x:e.clientX-r.left,y:e.clientY-r.top,t:performance.now()};
+}
+
+function findEntityRoot(obj){
+  let o=obj;
+  while(o){
+    if(o.userData&&o.userData.entity)return o;
+    o=o.parent;
+  }
+  return null;
+}
+
+function raycastAt(x,y){
+  const r=slashCanvas.getBoundingClientRect();
+  const ndc=new THREE.Vector2(
+    (x/r.width)*2-1,
+    -(y/r.height)*2+1
+  );
+
+  raycaster.setFromCamera(ndc,camera);
+  const roots=entities.map(e=>e.root);
+  const hits=raycaster.intersectObjects(roots,true);
+  if(!hits.length)return null;
+  return findEntityRoot(hits[0].object);
+}
+
+function hitSegment(a,b){
+  const dx=b.x-a.x,dy=b.y-a.y;
+  const dist=Math.hypot(dx,dy);
+  const steps=clamp(Math.ceil(dist/15),1,14);
+  const seen=new Set();
+  const swipeAngle=Math.atan2(-(b.y-a.y),b.x-a.x);
+
+  for(let i=0;i<=steps;i++){
+    const t=i/steps;
+    const root=raycastAt(a.x+dx*t,a.y+dy*t);
+    if(root&&!seen.has(root)){
+      seen.add(root);
+      sliceEntity(root,swipeAngle);
+      if(state!==STATE.PLAYING)break;
+    }
+  }
+}
+
+function sliceEntity(root,swipeAngle){
+  const e=root.userData.entity;
+  if(!e||e.sliced)return;
+  e.sliced=true;
+
+  if(e.kind==='bomb'){
+    lives--;
+    bombsHit++;
+    score=Math.max(0,score-40);
+    spawnExplosion(root);
+    addFloatText(root.position,'BOMB! -1 ❤️','#ff6b42',30);
+    shake=Math.max(shake,.30);
+    flash=.30;
+    sfxBomb();
+    scene.remove(root);
+    entities=entities.filter(x=>x.root!==root);
+    updateUI();
+    if(lives<=0)endGame();
+    return;
+  }
+
+  currentSwipeHits++;
+  bestCombo=Math.max(bestCombo,currentSwipeHits);
+  totalSliced++;
+
+  if(e.special==='heart'){
+    lives=Math.min(5,lives+1);
+    score+=35;
+    addFloatText(root.position,'+1 ❤️','#ff9fbd',28);
+    tone(720,.12,'sine',.04,1100);
+  }else if(e.special==='gold'){
+    score+=100;
+    addFloatText(root.position,'GOLD +100','#ffe17a',28);
+    tone(900,.13,'triangle',.045,1350);
+  }else{
+    const mul=1+Math.max(0,currentSwipeHits-1)*.18;
+    const pts=Math.round(e.type.score*mul);
+    score+=pts;
+    addFloatText(root.position,'+'+pts,'#fff4ce',22);
+    spawnFruitHalves(root,swipeAngle);
+    spawnJuice(root,e.type.juice,swipeAngle);
+    sfxSlice();
+  }
+
+  if(currentSwipeHits>=2){
+    const p=root.position.clone();p.y+=.55;
+    addFloatText(p,'COMBO ×'+currentSwipeHits,'#ffe66f',25);
+    sfxCombo(currentSwipeHits);
+    shake=Math.max(shake,Math.min(.10,currentSwipeHits*.012));
+  }
+
+  scene.remove(root);
+  entities=entities.filter(x=>x.root!==root);
+  updateUI();
+}
+
+slashCanvas.addEventListener('pointerdown',e=>{
+  if(state!==STATE.PLAYING||isPaused)return;
+  ensureAudio();
+  pointerDown=true;
+  pointerId=e.pointerId;
+  slashCanvas.setPointerCapture?.(e.pointerId);
+  currentSwipeHits=0;
+  lastPointer=screenPos(e);
+  slashTrail.length=0;
+  slashTrail.push({x:lastPointer.x,y:lastPointer.y,life:1,width:5});
+  updateUI();
+});
+
+slashCanvas.addEventListener('pointermove',e=>{
+  if(!pointerDown||state!==STATE.PLAYING||e.pointerId!==pointerId)return;
+  const p=screenPos(e);
+  const dt=Math.max(.004,(p.t-lastPointer.t)/1000);
+  const dist=Math.hypot(p.x-lastPointer.x,p.y-lastPointer.y);
+  const speed=dist/dt;
+  const width=clamp(4+speed/180,5,16);
+
+  hitSegment(lastPointer,p);
+  slashTrail.push({x:p.x,y:p.y,life:1,width});
+  if(slashTrail.length>24)slashTrail.shift();
+
+  sfxSwoosh(speed);
+  lastPointer=p;
+});
+
+function finishSwipe(e){
+  if(!pointerDown)return;
+  if(e&&pointerId!==null&&e.pointerId!==pointerId)return;
+
+  if(currentSwipeHits>=2){
+    const bonus=(currentSwipeHits-1)*12;
+    score+=bonus;
+    updateUI();
+  }
+
+  pointerDown=false;pointerId=null;lastPointer=null;
+  currentSwipeHits=0;
+  updateUI();
+}
+slashCanvas.addEventListener('pointerup',finishSwipe);
+slashCanvas.addEventListener('pointercancel',finishSwipe);
+slashCanvas.addEventListener('lostpointercapture',()=>finishSwipe(null));
+
+// ============================================================
+// GAME UPDATE
+// ============================================================
+const gravity=new THREE.Vector3(0,-9.8,0);
+
+function updateGame(dt){
+  if(state!==STATE.PLAYING||isPaused)return;
+
+  elapsed+=dt;
+  swooshCooldown=Math.max(0,swooshCooldown-dt);
+  shake=Math.max(0,shake-dt*.85);
+  flash=Math.max(0,flash-dt*1.8);
+
+  const d=difficulty();
+  spawnTimer-=dt;
+  if(spawnTimer<=0){
+    spawnWave();
+    spawnTimer=d.interval*rand(.84,1.18);
+  }
+
+  for(const wrap of [...entities]){
+    const root=wrap.root;
+    const e=root.userData.entity;
+
+    e.velocity.addScaledVector(gravity,dt);
+    root.position.addScaledVector(e.velocity,dt);
+    root.rotation.x+=e.rotVel.x*dt;
+    root.rotation.y+=e.rotVel.y*dt;
+    root.rotation.z+=e.rotVel.z*dt;
+
+    if(e.kind==='bomb'&&root.userData.spark){
+      const s=.84+.20*Math.sin(elapsed*19+root.position.x);
+      root.userData.spark.scale.setScalar(s);
+    }
+
+    // Fruit missed: lose life. Bomb missed: safe.
+    if(e.kind==='fruit'&&!e.missed&&root.position.y<-6.1&&e.velocity.y<0){
+      e.missed=true;
+      if(!e.special){
+        totalMissed++;
+        lives--;
+        sfxMiss();
+        shake=Math.max(shake,.08);
+        updateUI();
+        if(lives<=0){
+          endGame();
+        }
+      }
+    }
+
+    if(root.position.y<-7.2||Math.abs(root.position.x)>8.5){
+      scene.remove(root);
+      entities=entities.filter(x=>x.root!==root);
+    }
+  }
+
+  // FX physics
+  for(const f of fx){
+    f.life-=dt;
+    if(f.type==='half'){
+      f.velocity.addScaledVector(gravity,dt);
+      f.object.position.addScaledVector(f.velocity,dt);
+      f.object.rotation.x+=f.rotVel.x*dt;
+      f.object.rotation.y+=f.rotVel.y*dt;
+      f.object.rotation.z+=f.rotVel.z*dt;
+    }else if(f.type==='juice'||f.type==='explosion'){
+      const arr=f.object.geometry.attributes.position.array;
+      for(let i=0;i<f.velocities.length;i++){
+        const v=f.velocities[i];
+        v.y-=8.6*dt;
+        arr[i*3]+=v.x*dt;
+        arr[i*3+1]+=v.y*dt;
+        arr[i*3+2]+=v.z*dt;
+      }
+      f.object.geometry.attributes.position.needsUpdate=true;
+      f.object.material.opacity=clamp(f.life/f.maxLife,0,1);
+    }
+  }
+
+  for(const f of fx){
+    if(f.life<=0){
+      scene.remove(f.object);
+      f.object.traverse?.(o=>{
+        if(o.geometry&&!o.geometry.__shared)o.geometry.dispose?.();
+        if(o.material&&!Array.isArray(o.material))o.material.dispose?.();
+      });
+    }
+  }
+  fx=fx.filter(f=>f.life>0);
+
+  for(const t of floatTexts){
+    t.life-=dt*1.15;
+    t.pos.y+=t.vy*dt;
+  }
+  floatTexts=floatTexts.filter(t=>t.life>0);
+
+  for(const s of slashTrail)s.life-=dt*4.8;
+  while(slashTrail.length&&slashTrail[0].life<=0)slashTrail.shift();
+}
+
+// ============================================================
+// 2D OVERLAY DRAWING
+// ============================================================
+function resize(){
+  const aspect=Math.max(.35,innerWidth/Math.max(1,innerHeight));
+  const portrait=aspect<.85;
+
+  gameplayHalfWidth=portrait?2.65:(aspect<1.25?3.35:4.2);
+  adaptiveCamZ=portrait?16.4:(aspect<1.25?14.7:13.5);
+  adaptiveCamY=portrait?.45:.6;
+  camera.fov=portrait?56:48;
+
+  renderer.setPixelRatio(Math.min(quality.dpr,devicePixelRatio||1));
+  renderer.setSize(innerWidth,innerHeight,false);
+  camera.aspect=aspect;
+  camera.updateProjectionMatrix();
+
+  const d=Math.min(quality.dpr,devicePixelRatio||1);
+  slashCanvas.width=Math.round(innerWidth*d);
+  slashCanvas.height=Math.round(innerHeight*d);
+  slashCanvas.style.width=innerWidth+'px';
+  slashCanvas.style.height=innerHeight+'px';
+  sctx.setTransform(d,0,0,d,0,0);
+}
+addEventListener('resize',resize);
+resize();
+
+function worldToScreen(v){
+  const p=v.clone().project(camera);
+  return {
+    x:(p.x*.5+.5)*innerWidth,
+    y:(-.5*p.y+.5)*innerHeight,
+    visible:p.z<1
+  };
+}
+
+function drawSlashOverlay(){
+  sctx.clearRect(0,0,innerWidth,innerHeight);
+
+  if(slashTrail.length>1){
+    sctx.save();
+    sctx.lineCap='round';sctx.lineJoin='round';
+    for(let i=1;i<slashTrail.length;i++){
+      const a=slashTrail[i-1],b=slashTrail[i];
+      const life=Math.min(a.life,b.life);
+      if(life<=0)continue;
+
+      sctx.strokeStyle=`rgba(80,225,255,${.18*life})`;
+      sctx.lineWidth=(b.width+10)*life;
+      sctx.beginPath();sctx.moveTo(a.x,a.y);sctx.lineTo(b.x,b.y);sctx.stroke();
+
+      sctx.strokeStyle=`rgba(255,255,255,${.95*life})`;
+      sctx.lineWidth=Math.max(1,b.width*.48*life);
+      sctx.beginPath();sctx.moveTo(a.x,a.y);sctx.lineTo(b.x,b.y);sctx.stroke();
+    }
+    sctx.restore();
+  }
+
+  sctx.save();
+  sctx.textAlign='center';sctx.textBaseline='middle';
+  for(const t of floatTexts){
+    const p=worldToScreen(t.pos);
+    if(!p.visible)continue;
+    sctx.globalAlpha=clamp(t.life,0,1);
+    sctx.font=`900 ${t.size}px system-ui`;
+    sctx.lineWidth=4;
+    sctx.strokeStyle='rgba(35,10,3,.60)';
+    sctx.strokeText(t.text,p.x,p.y);
+    sctx.fillStyle=t.color;
+    sctx.fillText(t.text,p.x,p.y);
+  }
+  sctx.restore();
+  sctx.globalAlpha=1;
+
+  if(flash>0){
+    sctx.fillStyle=`rgba(255,80,30,${flash})`;
+    sctx.fillRect(0,0,innerWidth,innerHeight);
+  }
+}
+
+// ============================================================
+// CAMERA + PREVIEW
+// ============================================================
+const camBase=new THREE.Vector3(0,.6,13.5);
+
+function updateCamera(){
+  camBase.set(0,adaptiveCamY,adaptiveCamZ);
+  camera.position.copy(camBase);
+  if(shake>0){
+    camera.position.x+=rand(-shake,shake);
+    camera.position.y+=rand(-shake,shake);
+    camera.position.z+=rand(-shake,shake)*.6;
+  }
+  camera.lookAt(0,.25,0);
+}
+
+function seedPreview(){
+  const setup=[
+    [-3.1,-1.5,-.8,'apple'],
+    [-1.55,-1.1,-1.0,'orange'],
+    [0,-1.25,-1.1,'watermelon'],
+    [1.8,-1.2,-.9,'banana'],
+    [3.35,-1.45,-.8,'peach']
+  ];
+
+  for(const [x,y,z,name] of setup){
+    const type=FRUIT_TYPES.find(t=>t.name===name);
+    const o=makeFruitMesh(type,null);
+    o.position.set(x,y,z);
+    o.rotation.set(.1,rand(0,Math.PI*2),-.08);
+    o.scale.setScalar(.92);
+    scene.add(o);
+    previewObjects.push(o);
+  }
+}
+seedPreview();
+
+function updatePreview(dt){
+  if(state!==STATE.MENU)return;
+  previewObjects.forEach((o,i)=>{
+    o.rotation.y+=dt*(.25+i*.03);
+    o.position.y+=Math.sin(performance.now()*.0015+i)*dt*.06;
+  });
+}
+
+// ============================================================
+// PERFORMANCE ADAPTATION
+// ============================================================
+function monitorPerformance(dt){
+  if(state!==STATE.PLAYING||isPaused)return;
+  perfTime+=dt;
+  perfFrames++;
+  if(perfTime>=4){
+    const fps=perfFrames/perfTime;
+    if(fps<42&&qualityName==='high')applyQuality('medium');
+    else if(fps<35&&qualityName==='medium')applyQuality('low');
+    perfTime=0;
+    perfFrames=0;
+  }
+}
+
+// ============================================================
+// MAIN LOOP
+// ============================================================
+let last=performance.now();
+
+function loop(now){
+  const dt=Math.min(.033,Math.max(.001,(now-last)/1000));
+  last=now;
+
+  updatePreview(dt);
+  updateGame(dt);
+  monitorPerformance(dt);
+  updateCamera();
+  renderer.render(scene,camera);
+  drawSlashOverlay();
+
+  requestAnimationFrame(loop);
+}
+
+ui.loading.style.display='none';
+
+// Browser install prompt (Android/desktop Chromium). iOS uses Share > Add to Home Screen.
+let deferredInstallPrompt=null;
+window.addEventListener('beforeinstallprompt',e=>{
+  e.preventDefault();
+  deferredInstallPrompt=e;
+  ui.install.hidden=false;
+});
+ui.install.addEventListener('click',async()=>{
+  if(!deferredInstallPrompt)return;
+  deferredInstallPrompt.prompt();
+  try{await deferredInstallPrompt.userChoice}catch(_){}
+  deferredInstallPrompt=null;
+  ui.install.hidden=true;
+});
+window.addEventListener('appinstalled',()=>{
+  deferredInstallPrompt=null;
+  ui.install.hidden=true;
+});
+
+if('serviceWorker' in navigator && /^https?:$/.test(location.protocol)){
+  navigator.serviceWorker.register('./sw.js').catch(err=>{
+    console.warn('Service worker gagal didaftarkan:',err);
+  });
+}
+
+requestAnimationFrame(loop);
+
+</script>
+</body>
+</html>
